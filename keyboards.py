@@ -1,4 +1,4 @@
-# keyboards.py
+import math
 from aiogram.types import (
     ReplyKeyboardMarkup,
     KeyboardButton,
@@ -6,53 +6,83 @@ from aiogram.types import (
     InlineKeyboardButton
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from env import TRADING_PAIRS
+from config import TRADING_PAIRS
 
-# ۱. دکمه‌های رینگی (منوی پایین صفحه - Reply Keyboard)
-def main_reply_keyboard() -> ReplyKeyboardMarkup:
+PAGE_SIZE = 10  # تعداد ارزها در هر صفحه
+
+
+# ۱. منوی اصلی پایین صفحه (Reply Keyboard)
+def get_main_menu() -> ReplyKeyboardMarkup:
     kb = [
-        [KeyboardButton(text="📊 لیست ارزها و تحلیل"), KeyboardButton(text="⚡️ اسکن کلی بازار")],
-        [KeyboardButton(text="⚙️ تنظیمات تایم‌فریم"), KeyboardButton(text="ℹ️ راهنما")]
+        [KeyboardButton(text="📊 لیست و تحلیل ارزها")],
+        [KeyboardButton(text="💼 موجودی کیف‌پول"), KeyboardButton(text="ℹ️ راهنما")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 
-# ۲. دکمه‌های شیشه‌ای برای لیست ۱۰۰ ارز به صورت صفحه‌بندی‌شده (Pagination)
-def get_crypto_page_keyboard(page: int = 0, per_page: int = 10) -> InlineKeyboardMarkup:
+# ۲. کیبورد اینلاین جفت‌ارزها با قابلیت صفحه‌بندی (Pagination)
+def get_pairs_keyboard(page: int = 0) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    
-    start_idx = page * per_page
-    end_idx = start_idx + per_page
+
+    total_pairs = len(TRADING_PAIRS)
+    total_pages = math.ceil(total_pairs / PAGE_SIZE)
+
+    # اطمینان از قرار گرفتن شماره صفحه در محدوده مجاز
+    page = max(0, min(page, total_pages - 1))
+
+    # برش دادن ۱۰ ارز برای صفحه فعلی
+    start_idx = page * PAGE_SIZE
+    end_idx = start_idx + PAGE_SIZE
     current_pairs = TRADING_PAIRS[start_idx:end_idx]
-    
-    # دکمه ارزها (۲ ارز در هر سطر)
+
+    # افزودن دکمه‌های ارزها (در سطرهای ۲تایی)
     for pair in current_pairs:
-        # نام تمیزتر برای نمایش (مثلاً BTC)
-        coin_name = pair.split('/')[0]
-        builder.button(text=f"📈 {coin_name}", callback_data=f"analyze_{pair}")
-    
-    builder.adjust(2)
-    
-    # دکمه‌های قبلی/بعدی برای تغییر صفحه
+        # callback_data را طوری می‌گذاریم که در bot.py بفهمیم کدام ارز کلیک شده
+        builder.button(
+            text=pair,
+            callback_data=f"select_pair:{pair}"
+        )
+    builder.adjust(2)  # چینش دکمه‌های ارزها در ۲ ستون
+
+    # دکمه‌های ناوبری (قبلی / بعدی / شماره صفحه)
     nav_buttons = []
+    
+    # دکمه صفحه قبل
     if page > 0:
-        nav_buttons.append(InlineKeyboardButton(text="◀️ صفحه قبل", callback_data=f"page_{page - 1}"))
-    
-    total_pages = (len(TRADING_PAIRS) + per_page - 1) // per_page
-    nav_buttons.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop"))
-    
-    if end_idx < len(TRADING_PAIRS):
-        nav_buttons.append(InlineKeyboardButton(text="صفحه بعد ▶️", callback_data=f"page_{page + 1}"))
-    
+        nav_buttons.append(
+            InlineKeyboardButton(text="⬅️ قبلی", callback_data=f"page:{page - 1}")
+        )
+    else:
+        nav_buttons.append(
+            InlineKeyboardButton(text="⏹", callback_data="noop")
+        )
+
+    # نمایشگر صفحه فعلی
+    nav_buttons.append(
+        InlineKeyboardButton(text=f"📄 {page + 1}/{total_pages}", callback_data="noop")
+    )
+
+    # دکمه صفحه بعد
+    if page < total_pages - 1:
+        nav_buttons.append(
+            InlineKeyboardButton(text="بعدی ➡️", callback_data=f"page:{page + 1}")
+        )
+    else:
+        nav_buttons.append(
+            InlineKeyboardButton(text="⏹", callback_data="noop")
+        )
+
+    # افزودن ردیف دکمه‌های ناوبری به انتهای کیبورد
     builder.row(*nav_buttons)
+
     return builder.as_markup()
 
 
-# ۳. دکمه‌های شیشه‌ای برای انتخاب تایم‌فریم
-def timeframe_inline_keyboard() -> InlineKeyboardMarkup:
+# ۳. کیبورد انتخاب عملیات برای ارز انتخاب‌شده (تحلیل، خرید، فروش)
+def get_pair_actions_keyboard(pair: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    timeframes = ["15m", "1h", "4h", "1d"]
-    for tf in timeframes:
-        builder.button(text=f"⏱ {tf}", callback_data=f"set_tf_{tf}")
-    builder.adjust(2)
+    builder.button(text="📈 تحلیل تکنیکال (RSI/MACD)", callback_data=f"analyze:{pair}")
+    builder.button(text="💵 استعلام قیمت لحظه‌ای", callback_data=f"price:{pair}")
+    builder.button(text="🔙 بازگشت به لیست", callback_data="back_to_list")
+    builder.adjust(1)
     return builder.as_markup()

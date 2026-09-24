@@ -1,2 +1,12 @@
 .env
 env.py
+__pycache__/
+.env
+__pycache__/
+.env
+venv/
+__pycache__/
+.env
+venv/
+.env
+__pycache__/
